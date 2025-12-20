@@ -32,6 +32,31 @@ def _get_screen_resolution() -> Tuple[int, int]:
     return (1920, 1080)
 
 
+def _list_camera_devices(max_devices: int = 6) -> list:
+    pf = platform.system()
+    if pf == "Darwin":
+        try:
+            from AVFoundation import AVCaptureDevice, AVMediaTypeVideo  # type: ignore
+
+            devices = AVCaptureDevice.devicesWithMediaType_(AVMediaTypeVideo)
+            return [(idx, dev.localizedName()) for idx, dev in enumerate(devices)]
+        except Exception:
+            pass
+
+    try:
+        import cv2  # type: ignore
+
+        devices = []
+        for idx in range(max_devices):
+            cap = cv2.VideoCapture(idx)
+            if cap is not None and cap.isOpened():
+                devices.append((idx, f"Device {idx}"))
+                cap.release()
+        return devices
+    except Exception:
+        return [(idx, f"Device {idx}") for idx in range(4)]
+
+
 def cli_arg(argv: Optional[list] = None):
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--camera", type=int, default=0, help="Camera device index (default: 0)")
@@ -85,32 +110,37 @@ def tk_arg():
     Val4.set(30)                        # デフォルトマウス感度
     place = ['Normal', 'Above', 'Behind']
     # Camera #########################################################################
-    Static1 = tk.Label(text='Camera').grid(row=1)
-    for i in range(4):
-        tk.Radiobutton(root,
-                       value=i,
-                       variable=Val1,
-                       text=f'Device{i}'
-                       ).grid(row=2, column=i*2)
-    St1 = tk.Label(text='     ').grid(row=3)
+    tk.Label(text='Camera').grid(row=1, column=0, sticky="w")
+    devices = _list_camera_devices()
+    if not devices:
+        devices = [(0, "Device 0")]
+    for offset, (idx, name) in enumerate(devices):
+        tk.Radiobutton(
+            root,
+            value=idx,
+            variable=Val1,
+            text=f"{idx}: {name}",
+        ).grid(row=2 + offset, column=0, columnspan=4, sticky="w")
+    next_row = 2 + len(devices)
+    tk.Label(text='     ').grid(row=next_row, column=0)
     # Place #########################################################################
-    Static1 = tk.Label(text='How to place').grid(row=4)
+    tk.Label(text='How to place').grid(row=next_row + 1, column=0, sticky="w")
     for i in range(3):
         tk.Radiobutton(root,
                        value=i,
                        variable=Val2,
                        text=f'{place[i]}'
-                       ).grid(row=5, column=i*2)
-    St1 = tk.Label(text='     ').grid(row=6)
+                       ).grid(row=next_row + 2, column=i*2)
+    tk.Label(text='     ').grid(row=next_row + 3)
     # Sensitivity ###################################################################
-    Static4 = tk.Label(text='Sensitivity').grid(row=7)
+    tk.Label(text='Sensitivity').grid(row=next_row + 4, column=0, sticky="w")
     s1 = tk.Scale(root, orient='h',
                   from_=1, to=100, variable=Val4
-                  ).grid(row=8, column=2)
-    St4 = tk.Label(text='     ').grid(row=9)
+                  ).grid(row=next_row + 5, column=2)
+    tk.Label(text='     ').grid(row=next_row + 6)
     # continue
     Button = tk.Button(text="continue", command=root.destroy).grid(
-        row=10, column=2)
+        row=next_row + 7, column=2)
     # 待機
     root.mainloop()
     # 出力
