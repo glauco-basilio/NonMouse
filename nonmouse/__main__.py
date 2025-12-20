@@ -13,10 +13,19 @@ import numpy as np
 import mediapipe as mp
 from pynput.mouse import Button, Controller
 
-from nonmouse.args import *
+from nonmouse.args import get_arg
 from nonmouse.utils import *
 
 mouse = Controller()
+if not hasattr(mp, "solutions"):
+    raise RuntimeError(
+        "This project requires the legacy MediaPipe Solutions API (mp.solutions.*), "
+        "but your installed 'mediapipe' package does not provide it.\n\n"
+        "Fix:\n"
+        "- Apple Silicon (macOS/arm64): `pip install mediapipe-silicon numpy<2 opencv-contrib-python<4.12`\n"
+        "- Other platforms: install a MediaPipe build that includes `mp.solutions`.\n"
+    )
+
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
@@ -30,7 +39,7 @@ elif pf == 'Linux':
 
 
 def main():
-    cap_device, mode, kando, screenRes = tk_arg()
+    cap_device, mode, kando, screenRes = get_arg()
     dis = 0.7                           # くっつける距離の定義
     preX, preY = 0, 0
     nowCli, preCli = 0, 0               # 現在、前回の左クリック状態

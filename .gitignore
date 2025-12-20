@@ -1,7 +1,15 @@
 # personal environment dependent
 __pycache__/
 venv/
-.vscode
+venv.clt.bak/
+.cache/
+.nonmouse.log
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/.env
 
 # pyinstaller 
 dist/

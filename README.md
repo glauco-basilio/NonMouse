@@ -62,6 +62,20 @@ $ pip install nonmouse
 ```
 (If you have trouble installing mediapipe, please visit the [official website](https://google.github.io/mediapipe/getting_started/install.html).)
 
+## 🧑‍💻 From source (dev/debug)
+```sh
+$ python3 -m venv venv
+$ . venv/bin/activate
+(venv)$ pip install -r requirements.txt
+(venv)$ python -m nonmouse --no-gui
+```
+
+Notes:
+- On Apple Silicon (macOS/arm64) this repo uses `mediapipe-silicon` (see `requirements.txt`).
+- For the Tk “First Setup” window on macOS, use a Python build that includes Tk 8.6 (Homebrew/python.org), not Apple Command Line Tools Python.
+- macOS may require Accessibility permissions (and sometimes `sudo`) for global hotkeys.
+- macOS will require Camera permission for the app you run it from (Terminal/VS Code/Python).
+
 # Usage
 ## 1. Install a camera
 The following three ways of placing the device are assumed.

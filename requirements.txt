@@ -1,5 +1,5 @@
 # tested on pyton==3.9.0
-absl-py==1.2.0
+absl-py==2.3
 altgraph==0.17.2
 attrs==22.1.0
 cycler==0.11.0
@@ -8,11 +8,17 @@ keyboard==0.13.5
 kiwisolver==1.4.4
 macholib==1.16
 matplotlib==3.5.3
-mediapipe==0.8.10.1
-numpy==1.19.4
-opencv-contrib-python==4.6.0.66
-opencv-python==4.5.3.56
-opencv-python-headless==4.6.0.66
+# MediaPipe:
+# - On Apple Silicon (darwin/arm64), use mediapipe-silicon which provides the legacy `mp.solutions.*` API used by NonMouse.
+# - Elsewhere, use the official mediapipe package.
+mediapipe-silicon==0.9.2.1; sys_platform == "darwin" and platform_machine == "arm64"
+mediapipe==0.10.31; sys_platform != "darwin" or platform_machine != "arm64"
+
+# NumPy 2.x breaks several compiled wheels used by this project (mediapipe-silicon, matplotlib, opencv).
+numpy<2
+
+# OpenCV: keep compatible with NumPy 1.x.
+opencv-contrib-python<4.12
 packaging==21.3
 Pillow==9.2.0
 protobuf==3.20.1
