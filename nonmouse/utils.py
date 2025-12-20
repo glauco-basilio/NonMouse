@@ -30,7 +30,7 @@ def calculate_distance(lankdmark1, landmark2):
     return distance
 
 
-def calculate_moving_average(landmark, ran, LiT):   # (座標、いくつ分の平均か、移動平均を格納するリスト)
+def calculate_moving_average(landmark, ran, LiT):   # (coords, window size, moving-average buffer)
     """
     Calculate moving averages
 
@@ -48,9 +48,9 @@ def calculate_moving_average(landmark, ran, LiT):   # (座標、いくつ分の�
     moving average : float
     """
 
-    while len(LiT) < ran:               # ran個分のデータをLiTに追加（最初だけ）
+    while len(LiT) < ran:               # Fill buffer with the initial value.
         LiT.append(landmark)
-    LiT.append(landmark)                # LiTの更新（最後に追加）
-    if len(LiT) > ran:                  # LiTの更新（最初を削除）
+    LiT.append(landmark)                # Append newest value.
+    if len(LiT) > ran:                  # Remove oldest value.
         LiT.pop(0)
     return sum(LiT)/ran

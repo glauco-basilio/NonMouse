@@ -117,11 +117,11 @@ def tk_arg():
     root.title("First Setup")
     root.geometry("370x320")
     screenRes = (root.winfo_screenwidth(),
-                 root.winfo_screenheight())  # ディスプレイ解像度取得
+                 root.winfo_screenheight())  # Display resolution
     Val1 = tk.IntVar()
     Val2 = tk.IntVar()
     Val4 = tk.IntVar()
-    Val4.set(30)                        # デフォルトマウス感度
+    Val4.set(30)                        # Default mouse sensitivity
     place = ['Normal', 'Above', 'Behind']
     # Camera #########################################################################
     tk.Label(text='Camera').grid(row=1, column=0, sticky="w")
@@ -155,9 +155,9 @@ def tk_arg():
     # continue
     Button = tk.Button(text="continue", command=root.destroy).grid(
         row=next_row + 7, column=2)
-    # 待機
+    # Wait
     root.mainloop()
-    # 出力
+    # Output
     cap_device = Val1.get()             # 0,1,2
     mode = Val2.get()                     # 0:youself 1:
     kando = Val4.get()/10               # 1~10
