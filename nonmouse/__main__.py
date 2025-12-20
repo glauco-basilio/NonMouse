@@ -35,26 +35,26 @@ if pf == 'Windows':
 elif pf == 'Darwin':
     hotkey = 'Command'
 elif pf == 'Linux':
-    hotkey = 'XXX'              # hotkeyはLinuxでは無効
+    hotkey = 'XXX'              # Hotkey is disabled on Linux.
 
 
 def main():
     cap_device, mode, kando, screenRes, ns = get_arg()
-    dis = 0.7                           # くっつける距離の定義
+    dis = 0.7                           # Threshold distance for "touch" gestures.
     preX, preY = 0, 0
-    nowCli, preCli = 0, 0               # 現在、前回の左クリック状態
-    norCli, prrCli = 0, 0               # 現在、前回の右クリック状態
-    douCli = 0                          # ダブルクリック状態
+    nowCli, preCli = 0, 0               # Current and previous left-click state.
+    norCli, prrCli = 0, 0               # Current and previous right-click state.
+    douCli = 0                          # Double-click state.
     i, k, h = 0, 0, 0
     LiTx, LiTy, list0x, list0y, list1x, list1y, list4x, list4y, list6x, list6y, list8x, list8y, list12x, list12y = [
-    ], [], [], [], [], [], [], [], [], [], [], [], [], []   # 移動平均用リスト
+    ], [], [], [], [], [], [], [], [], [], [], [], [], []   # Moving average buffers.
     moving_average = [[0] * 3 for _ in range(3)]
     nowUgo = 1
     cap_width = 1280
     cap_height = 720
     start, c_start = float('inf'), float('inf')
     c_text = 0
-    # Webカメラ入力, 設定
+    # Webcam input and configuration.
     window_name = 'NonMouse'
     cv2.namedWindow(window_name)
     def open_capture(device_index):
@@ -68,7 +68,7 @@ def main():
         return cap_local, cfps_local
 
     cap, cfps = open_capture(cap_device)
-    # スムージング量（小さい:カーソルが小刻みに動く 大きい:遅延が大）
+    # Smoothing window (smaller = jittery cursor, larger = more latency).
     ran = max(int(cfps/10), 1)
     panel_root = None
     panel_vars = None
@@ -122,11 +122,11 @@ def main():
             "sens_var": sens_var,
         }
     hands = mp_hands.Hands(
-        min_detection_confidence=0.8,   # 検出信頼度
-        min_tracking_confidence=0.8,    # 追跡信頼度
-        max_num_hands=1                 # 最大検出数
+        min_detection_confidence=0.8,   # Detection confidence.
+        min_tracking_confidence=0.8,    # Tracking confidence.
+        max_num_hands=1                 # Max number of hands.
     )
-    # メインループ ###############################################################################
+    # Main loop ########################################################################
     while cap.isOpened():
         if panel_root is not None:
             try:
@@ -168,45 +168,45 @@ def main():
         if not success:
             continue
         if mode == 1:                   # Mouse
-            image = cv2.flip(image, 0)  # 上下反転
+            image = cv2.flip(image, 0)  # Flip vertically.
         elif mode == 2:                 # Touch
-            image = cv2.flip(image, 1)  # 左右反転
+            image = cv2.flip(image, 1)  # Flip horizontally.
 
-        # 画像を水平方向に反転し、BGR画像をRGBに変換
+        # Flip horizontally and convert BGR to RGB.
         image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
-        image.flags.writeable = False   # 参照渡しのためにイメージを書き込み不可としてマーク
-        results = hands.process(image)  # mediapipeの処理
-        image.flags.writeable = True    # 画像に手のアノテーションを描画
+        image.flags.writeable = False   # Mark read-only for pass-by-reference.
+        results = hands.process(image)  # MediaPipe processing.
+        image.flags.writeable = True    # Draw annotations on the image.
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         image_height, image_width, _ = image.shape
 
         if results.multi_hand_landmarks:
-            # 手の骨格描画
+            # Draw hand landmarks.
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(
                     image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            if pf == 'Linux':           # Linuxだったら、常に動かす
+            if pf == 'Linux':           # Always allow motion on Linux.
                 can = 1
                 c_text = 0
-            else:                       # Linuxじゃなかったら、keyboardからの入力を受け付ける
-                if keyboard.is_pressed(hotkey):  # linuxではこの条件文に触れないように
+            else:                       # Use the global hotkey on non-Linux.
+                if keyboard.is_pressed(hotkey):  # Avoid this branch on Linux.
                     can = 1
-                    c_text = 0          # push hotkeyなし
-                else:                   # 入力がなかったら、動かさない
+                    c_text = 0          # Hotkey pressed.
+                else:                   # No input, do not move.
                     can = 0
-                    c_text = 1          # push hotkeyあり
+                    c_text = 1          # Prompt to press hotkey.
                     # i = 0
-            # グローバルホットキーが押されているとき ##################################################
+            # When the global hotkey is pressed ###############################################
             if can == 1:
                 # print(hand_landmarks.landmark[0])
-                # preX, preYに現在のマウス位置を代入 1回だけ実行
+                # Seed preX/preY once from the current finger position.
                 if i == 0:
                     preX = hand_landmarks.landmark[8].x
                     preY = hand_landmarks.landmark[8].y
                     i += 1
 
-                # 以下で使うランドマーク座標の移動平均計算
+                # Moving averages for landmarks used below.
                 landmark0 = [calculate_moving_average(hand_landmarks.landmark[0].x, ran, list0x), calculate_moving_average(
                     hand_landmarks.landmark[0].y, ran, list0y)]
                 landmark1 = [calculate_moving_average(hand_landmarks.landmark[1].x, ran, list1x), calculate_moving_average(
@@ -220,17 +220,17 @@ def main():
                 landmark12 = [calculate_moving_average(hand_landmarks.landmark[12].x, ran, list12x), calculate_moving_average(
                     hand_landmarks.landmark[12].y, ran, list12y)]
 
-                # 指相対座標の基準距離、以後mediapipeから得られた距離をこの値で割る
+                # Reference distance; all other distances are normalized by this.
                 absKij = calculate_distance(landmark0, landmark1)
-                # 人差し指の先端と中指の先端間のユークリッド距離
+                # Distance between index fingertip and middle fingertip.
                 absUgo = calculate_distance(landmark8, landmark12) / absKij
-                # 人差し指の第２関節と親指の先端間のユークリッド距離
+                # Distance between index PIP joint and thumb tip.
                 absCli = calculate_distance(landmark4, landmark6) / absKij
 
                 posx, posy = mouse.position
 
-                # 人差し指の先端をカーソルに対応
-                # カメラ座標をマウス移動量に変換
+                # Use index fingertip to drive cursor movement.
+                # Convert camera coordinates into mouse deltas.
                 nowX = calculate_moving_average(
                     hand_landmarks.landmark[8].x, ran, LiTx)
                 nowY = calculate_moving_average(
@@ -239,13 +239,13 @@ def main():
                 dx = kando * (nowX - preX) * image_width
                 dy = kando * (nowY - preY) * image_height
 
-                if pf == 'Windows' or pf == 'Linux':     # Windows,linuxの場合、マウス移動量に0.5を足して補正
+                if pf == 'Windows' or pf == 'Linux':     # Add a small bias on Windows/Linux.
                     dx = dx+0.5
                     dy = dy+0.5
                 preX = nowX
                 preY = nowY
                 # print(dx, dy)
-                if posx+dx < 0:  # カーソルがディスプレイから出て戻ってこなくなる問題の防止
+                if posx+dx < 0:  # Prevent cursor from going off-screen permanently.
                     dx = -posx
                 elif posx+dx > screenRes[0]:
                     dx = screenRes[0]-posx
@@ -254,20 +254,20 @@ def main():
                 elif posy+dy > screenRes[1]:
                     dy = screenRes[1]-posy
 
-                # フラグ #########################################################################
-                # click状態
+                # Flags ########################################################################
+                # Click state.
                 if absCli < dis:
-                    nowCli = 1          # nowCli:左クリック状態(1:click  0:non click)
+                    nowCli = 1          # nowCli: left click state (1: click, 0: no click)
                     draw_circle(image, hand_landmarks.landmark[8].x * image_width,
                                 hand_landmarks.landmark[8].y * image_height, 20, (0, 250, 250))
                 elif absCli >= dis:
                     nowCli = 0
                 if np.abs(dx) > 7 and np.abs(dy) > 7:
-                    k = 0                           # 「動いている」ときk=0
-                # 右クリック状態 １秒以上クリック状態&&カーソルを動かさない
-                # 「動いていない」ときでクリックされたとき
+                    k = 0                           # k=0 when moving.
+                # Right click: hold click for >1.5s without moving.
+                # Only when the cursor is not moving.
                 if nowCli == 1 and np.abs(dx) < 7 and np.abs(dy) < 7:
-                    if k == 0:          # k:クリック状態&&カーソルを動かしてない。113, 140行目でk=0にする
+                    if k == 0:          # k: clicking and not moving.
                         start = time.perf_counter()
                         k += 1
                     end = time.perf_counter()
@@ -278,7 +278,7 @@ def main():
                 else:
                     norCli = 0
 
-                # 動かす###########################################################################
+                # Actions ######################################################################
                 # cursor
                 if absUgo >= dis and nowUgo == 1:
                     mouse.move(dx, dy)
@@ -286,9 +286,9 @@ def main():
                                 hand_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
                 # left click
                 if nowCli == 1 and nowCli != preCli:
-                    if h == 1:                                  # 右クリック終わった直後状態：左クリックしない
+                    if h == 1:                                  # After right click: skip left click.
                         h = 0
-                    elif h == 0:                                # 普段の状態
+                    elif h == 0:                                # Normal state.
                         mouse.press(Button.left)
                     # print('Click')
                 # left click release
@@ -296,23 +296,23 @@ def main():
                     mouse.release(Button.left)
                     k = 0
                     # print('Release')
-                    if douCli == 0:                             # 1回目のクリックが終わったら、時間測る
+                    if douCli == 0:                             # Start timing after first click.
                         c_start = time.perf_counter()
                         douCli += 1
                     c_end = time.perf_counter()
-                    if 10*(c_end-c_start) > 5 and douCli == 1:  # 0.5秒以内にもう一回クリックしたらダブルクリック
+                    if 10*(c_end-c_start) > 5 and douCli == 1:  # Double click within 0.5s.
                         mouse.click(Button.left, 2)             # double click
                         douCli = 0
                 # right click
                 if norCli == 1 and norCli != prrCli:
-                    # mouse.release(Button.left)                # 何故か必要
+                    # mouse.release(Button.left)                # Required in some cases.
                     mouse.press(Button.right)
                     mouse.release(Button.right)
-                    h = 1                                       # 右クリック終わった直後状態h=1
+                    h = 1                                       # Set "just right-clicked" state.
                     # print("right click")
                 # scroll
                 if hand_landmarks.landmark[8].y-hand_landmarks.landmark[5].y > -0.06:
-                    mouse.scroll(0, -dy/50)                     # スクロール感度下げる
+                    mouse.scroll(0, -dy/50)                     # Reduce scroll sensitivity.
                     draw_circle(image, hand_landmarks.landmark[8].x * image_width,
                                 hand_landmarks.landmark[8].y * image_height, 20, (0, 0, 0))
                     nowUgo = 0
@@ -322,7 +322,7 @@ def main():
                 preCli = nowCli
                 prrCli = norCli
 
-        # 表示 #################################################################################
+        # Display ########################################################################
         if c_text == 1:
             cv2.putText(image, f"Push {hotkey}", (20, 450),
                         cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
@@ -333,7 +333,7 @@ def main():
         cv2.putText(image, "FPS:"+fps, (20, 80),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
         dst = cv2.resize(image, dsize=None, fx=0.4,
-                         fy=0.4)         # HDの0.4倍で表示
+                         fy=0.4)         # Display at 0.4x scale.
         cv2.imshow(window_name, dst)
         if (cv2.waitKey(1) & 0xFF == 27) or (cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) == 0):
             break
