@@ -75,6 +75,8 @@ Notes:
 - For the Tk “First Setup” window on macOS, use a Python build that includes Tk 8.6 (Homebrew/python.org), not Apple Command Line Tools Python.
 - macOS may require Accessibility permissions (and sometimes `sudo`) for global hotkeys.
 - macOS will require Camera permission for the app you run it from (Terminal/VS Code/Python).
+- The Tk side panel for live camera/placement/sensitivity changes is enabled by default.
+- Use `--no-panel` to disable it, or `--panel` to force it on.
 
 # Usage
 ## 1. Install a camera

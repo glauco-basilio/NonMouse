@@ -57,6 +57,10 @@ def _list_camera_devices(max_devices: int = 6) -> list:
         return [(idx, f"Device {idx}") for idx in range(4)]
 
 
+def list_camera_devices(max_devices: int = 6) -> list:
+    return _list_camera_devices(max_devices)
+
+
 def cli_arg(argv: Optional[list] = None):
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--camera", type=int, default=0, help="Camera device index (default: 0)")
@@ -83,6 +87,16 @@ def cli_arg(argv: Optional[list] = None):
         "--no-gui",
         action="store_true",
         help="Skip the Tk first-setup window and use CLI defaults/flags.",
+    )
+    parser.add_argument(
+        "--panel",
+        action="store_true",
+        help="Show a Tk side panel for live camera/settings changes (default).",
+    )
+    parser.add_argument(
+        "--no-panel",
+        action="store_true",
+        help="Disable the Tk side panel.",
     )
 
     ns, _unknown = parser.parse_known_args(argv)
@@ -155,6 +169,8 @@ def get_arg():
     has_cli_overrides = (
         ns.no_gui
         or ns.gui
+        or ns.panel
+        or ns.no_panel
         or "--camera" in os.sys.argv
         or "--place" in os.sys.argv
         or "--sensitivity" in os.sys.argv
@@ -163,7 +179,7 @@ def get_arg():
     )
 
     if ns.gui and os.getenv("NONMOUSE_NO_GUI") not in {"1", "true", "yes"}:
-        return tk_arg()
+        return (*tk_arg(), ns)
 
     # Apple's Command Line Tools Python is frequently missing a usable Tk build; calling tk.Tk()
     # can abort the process. Prefer the CLI config unless the user explicitly forces --gui.
@@ -174,6 +190,8 @@ def get_arg():
         or has_cli_overrides
         or using_clt_python
     ):
-        return cap_device, mode, kando, screenRes
+        ns.panel = ns.panel or not ns.no_panel
+        return cap_device, mode, kando, screenRes, ns
 
-    return tk_arg()
+    ns.panel = ns.panel or not ns.no_panel
+    return (*tk_arg(), ns)

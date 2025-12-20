@@ -13,7 +13,7 @@ import numpy as np
 import mediapipe as mp
 from pynput.mouse import Button, Controller
 
-from nonmouse.args import get_arg
+from nonmouse.args import get_arg, list_camera_devices
 from nonmouse.utils import *
 
 mouse = Controller()
@@ -39,7 +39,7 @@ elif pf == 'Linux':
 
 
 def main():
-    cap_device, mode, kando, screenRes = get_arg()
+    cap_device, mode, kando, screenRes, ns = get_arg()
     dis = 0.7                           # くっつける距離の定義
     preX, preY = 0, 0
     nowCli, preCli = 0, 0               # 現在、前回の左クリック状態
@@ -57,15 +57,70 @@ def main():
     # Webカメラ入力, 設定
     window_name = 'NonMouse'
     cv2.namedWindow(window_name)
-    cap = cv2.VideoCapture(cap_device)
-    cap.set(cv2.CAP_PROP_FPS, 60)
-    cfps = int(cap.get(cv2.CAP_PROP_FPS))
-    if cfps < 30:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, cap_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cap_height)
-        cfps = int(cap.get(cv2.CAP_PROP_FPS))
+    def open_capture(device_index):
+        cap_local = cv2.VideoCapture(device_index)
+        cap_local.set(cv2.CAP_PROP_FPS, 60)
+        cfps_local = int(cap_local.get(cv2.CAP_PROP_FPS))
+        if cfps_local < 30:
+            cap_local.set(cv2.CAP_PROP_FRAME_WIDTH, cap_width)
+            cap_local.set(cv2.CAP_PROP_FRAME_HEIGHT, cap_height)
+            cfps_local = int(cap_local.get(cv2.CAP_PROP_FPS))
+        return cap_local, cfps_local
+
+    cap, cfps = open_capture(cap_device)
     # スムージング量（小さい:カーソルが小刻みに動く 大きい:遅延が大）
     ran = max(int(cfps/10), 1)
+    panel_root = None
+    panel_vars = None
+    if ns.panel:
+        import tkinter as tk
+
+        panel_root = tk.Tk()
+        panel_root.title("NonMouse Control Panel")
+        panel_root.geometry("360x420")
+
+        devices = list_camera_devices()
+        if not devices:
+            devices = [(0, "Device 0")]
+
+        cam_var = tk.IntVar(value=cap_device)
+        place_var = tk.IntVar(value=mode)
+        sens_var = tk.IntVar(value=int(kando * 10))
+
+        tk.Label(panel_root, text="Camera").grid(row=0, column=0, sticky="w")
+        for row_idx, (idx, name) in enumerate(devices, start=1):
+            tk.Radiobutton(
+                panel_root,
+                value=idx,
+                variable=cam_var,
+                text=f"{idx}: {name}",
+            ).grid(row=row_idx, column=0, columnspan=4, sticky="w")
+
+        row_offset = 1 + len(devices)
+        tk.Label(panel_root, text="How to place").grid(row=row_offset, column=0, sticky="w")
+        place_labels = ["Normal", "Above", "Behind"]
+        for i, label in enumerate(place_labels):
+            tk.Radiobutton(
+                panel_root,
+                value=i,
+                variable=place_var,
+                text=label,
+            ).grid(row=row_offset + 1, column=i, sticky="w")
+
+        tk.Label(panel_root, text="Sensitivity").grid(row=row_offset + 2, column=0, sticky="w")
+        tk.Scale(
+            panel_root,
+            orient="h",
+            from_=1,
+            to=100,
+            variable=sens_var,
+        ).grid(row=row_offset + 3, column=0, columnspan=3, sticky="we")
+
+        panel_vars = {
+            "cam_var": cam_var,
+            "place_var": place_var,
+            "sens_var": sens_var,
+        }
     hands = mp_hands.Hands(
         min_detection_confidence=0.8,   # 検出信頼度
         min_tracking_confidence=0.8,    # 追跡信頼度
@@ -73,6 +128,41 @@ def main():
     )
     # メインループ ###############################################################################
     while cap.isOpened():
+        if panel_root is not None:
+            try:
+                panel_root.update()
+            except Exception:
+                panel_root = None
+                panel_vars = None
+
+            if panel_vars is not None:
+                desired_device = int(panel_vars["cam_var"].get())
+                desired_mode = int(panel_vars["place_var"].get())
+                desired_kando = float(panel_vars["sens_var"].get()) / 10.0
+
+                if desired_device != cap_device:
+                    previous_device = cap_device
+                    cap.release()
+                    cap, cfps = open_capture(desired_device)
+                    if not cap.isOpened():
+                        cap.release()
+                        cap, cfps = open_capture(previous_device)
+                        panel_vars["cam_var"].set(previous_device)
+                    else:
+                        cap_device = desired_device
+                    ran = max(int(cfps/10), 1)
+                    preX, preY = 0, 0
+                    nowCli, preCli = 0, 0
+                    norCli, prrCli = 0, 0
+                    douCli = 0
+                    i, k, h = 0, 0, 0
+                    LiTx, LiTy, list0x, list0y, list1x, list1y, list4x, list4y, list6x, list6y, list8x, list8y, list12x, list12y = [
+                    ], [], [], [], [], [], [], [], [], [], [], [], [], []
+
+                if desired_mode != mode:
+                    mode = desired_mode
+                if desired_kando != kando:
+                    kando = desired_kando
         p_s = time.perf_counter()
         success, image = cap.read()
         if not success:
