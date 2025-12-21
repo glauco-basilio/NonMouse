@@ -11,7 +11,7 @@ import keyboard
 import platform
 import numpy as np
 import mediapipe as mp
-from pynput.mouse import Button, Controller
+from pynput.mouse import Controller
 
 from nonmouse.args import get_arg, list_camera_devices
 from nonmouse.utils import *
@@ -40,20 +40,13 @@ elif pf == 'Linux':
 
 def main():
     cap_device, mode, kando, screenRes, ns = get_arg()
-    dis = 0.7                           # Threshold distance for "touch" gestures.
     preX, preY = 0, 0
-    nowCli, preCli = 0, 0               # Current and previous left-click state.
-    norCli, prrCli = 0, 0               # Current and previous right-click state.
-    douCli = 0                          # Double-click state.
-    i, k, h = 0, 0, 0
-    LiTx, LiTy, list0x, list0y, list1x, list1y, list4x, list4y, list6x, list6y, list8x, list8y, list12x, list12y = [
-    ], [], [], [], [], [], [], [], [], [], [], [], [], []   # Moving average buffers.
-    moving_average = [[0] * 3 for _ in range(3)]
-    nowUgo = 1
+    i = 0
+    LiTx, LiTy, list0x, list0y = [], [], [], []   # Moving average buffers.
     cap_width = 1280
     cap_height = 720
-    start, c_start = float('inf'), float('inf')
     c_text = 0
+    prev_can = 0
     # Webcam input and configuration.
     window_name = 'NonMouse'
     cv2.namedWindow(window_name)
@@ -152,12 +145,8 @@ def main():
                         cap_device = desired_device
                     ran = max(int(cfps/10), 1)
                     preX, preY = 0, 0
-                    nowCli, preCli = 0, 0
-                    norCli, prrCli = 0, 0
-                    douCli = 0
-                    i, k, h = 0, 0, 0
-                    LiTx, LiTy, list0x, list0y, list1x, list1y, list4x, list4y, list6x, list6y, list8x, list8y, list12x, list12y = [
-                    ], [], [], [], [], [], [], [], [], [], [], [], [], []
+                    i = 0
+                    LiTx, LiTy, list0x, list0y = [], [], [], []
 
                 if desired_mode != mode:
                     mode = desired_mode
@@ -197,35 +186,24 @@ def main():
                     can = 0
                     c_text = 1          # Prompt to press hotkey.
                     # i = 0
+            if can == 0:
+                # Keep a live baseline while inactive to avoid jumps on activation.
+                baseline_x = calculate_moving_average(hand_landmarks.landmark[8].x, ran, LiTx)
+                baseline_y = calculate_moving_average(hand_landmarks.landmark[8].y, ran, LiTy)
+                preX, preY = baseline_x, baseline_y
+                i = 0
             # When the global hotkey is pressed ###############################################
             if can == 1:
                 # print(hand_landmarks.landmark[0])
-                # Seed preX/preY once from the current finger position.
-                if i == 0:
-                    preX = hand_landmarks.landmark[8].x
-                    preY = hand_landmarks.landmark[8].y
+                # Seed preX/preY when we first activate the hotkey.
+                if prev_can == 0 or i == 0:
                     i += 1
 
                 # Moving averages for landmarks used below.
                 landmark0 = [calculate_moving_average(hand_landmarks.landmark[0].x, ran, list0x), calculate_moving_average(
                     hand_landmarks.landmark[0].y, ran, list0y)]
-                landmark1 = [calculate_moving_average(hand_landmarks.landmark[1].x, ran, list1x), calculate_moving_average(
-                    hand_landmarks.landmark[1].y, ran, list1y)]
-                landmark4 = [calculate_moving_average(hand_landmarks.landmark[4].x, ran, list4x), calculate_moving_average(
-                    hand_landmarks.landmark[4].y, ran, list4y)]
-                landmark6 = [calculate_moving_average(hand_landmarks.landmark[6].x, ran, list6x), calculate_moving_average(
-                    hand_landmarks.landmark[6].y, ran, list6y)]
-                landmark8 = [calculate_moving_average(hand_landmarks.landmark[8].x, ran, list8x), calculate_moving_average(
-                    hand_landmarks.landmark[8].y, ran, list8y)]
-                landmark12 = [calculate_moving_average(hand_landmarks.landmark[12].x, ran, list12x), calculate_moving_average(
-                    hand_landmarks.landmark[12].y, ran, list12y)]
-
-                # Reference distance; all other distances are normalized by this.
-                absKij = calculate_distance(landmark0, landmark1)
-                # Distance between index fingertip and middle fingertip.
-                absUgo = calculate_distance(landmark8, landmark12) / absKij
-                # Distance between index PIP joint and thumb tip.
-                absCli = calculate_distance(landmark4, landmark6) / absKij
+                landmark8 = [calculate_moving_average(hand_landmarks.landmark[8].x, ran, LiTx), calculate_moving_average(
+                    hand_landmarks.landmark[8].y, ran, LiTy)]
 
                 posx, posy = mouse.position
 
@@ -235,6 +213,8 @@ def main():
                     hand_landmarks.landmark[8].x, ran, LiTx)
                 nowY = calculate_moving_average(
                     hand_landmarks.landmark[8].y, ran, LiTy)
+                if prev_can == 0:
+                    preX, preY = nowX, nowY
 
                 dx = kando * (nowX - preX) * image_width
                 dy = kando * (nowY - preY) * image_height
@@ -254,73 +234,12 @@ def main():
                 elif posy+dy > screenRes[1]:
                     dy = screenRes[1]-posy
 
-                # Flags ########################################################################
-                # Click state.
-                if absCli < dis:
-                    nowCli = 1          # nowCli: left click state (1: click, 0: no click)
-                    draw_circle(image, hand_landmarks.landmark[8].x * image_width,
-                                hand_landmarks.landmark[8].y * image_height, 20, (0, 250, 250))
-                elif absCli >= dis:
-                    nowCli = 0
-                if np.abs(dx) > 7 and np.abs(dy) > 7:
-                    k = 0                           # k=0 when moving.
-                # Right click: hold click for >1.5s without moving.
-                # Only when the cursor is not moving.
-                if nowCli == 1 and np.abs(dx) < 7 and np.abs(dy) < 7:
-                    if k == 0:          # k: clicking and not moving.
-                        start = time.perf_counter()
-                        k += 1
-                    end = time.perf_counter()
-                    if end-start > 1.5:
-                        norCli = 1
-                        draw_circle(image, hand_landmarks.landmark[8].x * image_width,
-                                    hand_landmarks.landmark[8].y * image_height, 20, (0, 0, 250))
-                else:
-                    norCli = 0
-
-                # Actions ######################################################################
-                # cursor
-                if absUgo >= dis and nowUgo == 1:
+                # Cursor movement only while the hotkey is pressed.
+                if prev_can == 1:
                     mouse.move(dx, dy)
                     draw_circle(image, hand_landmarks.landmark[8].x * image_width,
                                 hand_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
-                # left click
-                if nowCli == 1 and nowCli != preCli:
-                    if h == 1:                                  # After right click: skip left click.
-                        h = 0
-                    elif h == 0:                                # Normal state.
-                        mouse.press(Button.left)
-                    # print('Click')
-                # left click release
-                if nowCli == 0 and nowCli != preCli:
-                    mouse.release(Button.left)
-                    k = 0
-                    # print('Release')
-                    if douCli == 0:                             # Start timing after first click.
-                        c_start = time.perf_counter()
-                        douCli += 1
-                    c_end = time.perf_counter()
-                    if 10*(c_end-c_start) > 5 and douCli == 1:  # Double click within 0.5s.
-                        mouse.click(Button.left, 2)             # double click
-                        douCli = 0
-                # right click
-                if norCli == 1 and norCli != prrCli:
-                    # mouse.release(Button.left)                # Required in some cases.
-                    mouse.press(Button.right)
-                    mouse.release(Button.right)
-                    h = 1                                       # Set "just right-clicked" state.
-                    # print("right click")
-                # scroll
-                if hand_landmarks.landmark[8].y-hand_landmarks.landmark[5].y > -0.06:
-                    mouse.scroll(0, -dy/50)                     # Reduce scroll sensitivity.
-                    draw_circle(image, hand_landmarks.landmark[8].x * image_width,
-                                hand_landmarks.landmark[8].y * image_height, 20, (0, 0, 0))
-                    nowUgo = 0
-                else:
-                    nowUgo = 1
-
-                preCli = nowCli
-                prrCli = norCli
+            prev_can = can
 
         # Display ########################################################################
         if c_text == 1:
