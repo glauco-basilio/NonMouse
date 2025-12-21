@@ -14,10 +14,13 @@ def _get_screen_resolution() -> Tuple[int, int]:
         try:
             import AppKit  # type: ignore
 
-            screen = AppKit.NSScreen.mainScreen()
-            if screen is not None:
-                frame = screen.frame()
-                return int(frame.size.width), int(frame.size.height)
+            screens = AppKit.NSScreen.screens()
+            if screens:
+                min_x = min(screen.frame().origin.x for screen in screens)
+                min_y = min(screen.frame().origin.y for screen in screens)
+                max_x = max(screen.frame().origin.x + screen.frame().size.width for screen in screens)
+                max_y = max(screen.frame().origin.y + screen.frame().size.height for screen in screens)
+                return int(max_x - min_x), int(max_y - min_y)
         except Exception:
             pass
     elif pf == "Windows":
@@ -25,11 +28,43 @@ def _get_screen_resolution() -> Tuple[int, int]:
             import ctypes
 
             user32 = ctypes.windll.user32
-            return int(user32.GetSystemMetrics(0)), int(user32.GetSystemMetrics(1))
+            return int(user32.GetSystemMetrics(78)), int(user32.GetSystemMetrics(79))
         except Exception:
             pass
 
     return (1920, 1080)
+
+
+def _get_screen_bounds() -> Tuple[int, int, int, int]:
+    pf = platform.system()
+    if pf == "Darwin":
+        try:
+            import AppKit  # type: ignore
+
+            screens = AppKit.NSScreen.screens()
+            if screens:
+                min_x = min(screen.frame().origin.x for screen in screens)
+                min_y = min(screen.frame().origin.y for screen in screens)
+                max_x = max(screen.frame().origin.x + screen.frame().size.width for screen in screens)
+                max_y = max(screen.frame().origin.y + screen.frame().size.height for screen in screens)
+                return int(min_x), int(min_y), int(max_x), int(max_y)
+        except Exception:
+            pass
+    elif pf == "Windows":
+        try:
+            import ctypes
+
+            user32 = ctypes.windll.user32
+            min_x = int(user32.GetSystemMetrics(76))
+            min_y = int(user32.GetSystemMetrics(77))
+            width = int(user32.GetSystemMetrics(78))
+            height = int(user32.GetSystemMetrics(79))
+            return min_x, min_y, min_x + width, min_y + height
+        except Exception:
+            pass
+
+    width, height = _get_screen_resolution()
+    return 0, 0, width, height
 
 
 def _list_camera_devices(max_devices: int = 6) -> list:
@@ -107,7 +142,8 @@ def cli_arg(argv: Optional[list] = None):
         auto_w, auto_h = _get_screen_resolution()
         screen_w = screen_w or auto_w
         screen_h = screen_h or auto_h
-    return ns.camera, place_to_mode[ns.place], float(ns.sensitivity), (int(screen_w), int(screen_h)), ns
+    bounds = _get_screen_bounds()
+    return ns.camera, place_to_mode[ns.place], float(ns.sensitivity), (int(screen_w), int(screen_h)), bounds, ns
 
 
 def tk_arg():
@@ -161,11 +197,12 @@ def tk_arg():
     cap_device = Val1.get()             # 0,1,2
     mode = Val2.get()                     # 0:youself 1:
     kando = Val4.get()/10               # 1~10
-    return cap_device, mode, kando, screenRes
+    bounds = _get_screen_bounds()
+    return cap_device, mode, kando, screenRes, bounds
 
 
 def get_arg():
-    cap_device, mode, kando, screenRes, ns = cli_arg()
+    cap_device, mode, kando, screenRes, bounds, ns = cli_arg()
     has_cli_overrides = (
         ns.no_gui
         or ns.gui
@@ -179,7 +216,8 @@ def get_arg():
     )
 
     if ns.gui and os.getenv("NONMOUSE_NO_GUI") not in {"1", "true", "yes"}:
-        return (*tk_arg(), ns)
+        cap_device, mode, kando, screenRes, bounds = tk_arg()
+        return cap_device, mode, kando, screenRes, bounds, ns
 
     # Apple's Command Line Tools Python is frequently missing a usable Tk build; calling tk.Tk()
     # can abort the process. Prefer the CLI config unless the user explicitly forces --gui.
@@ -191,7 +229,8 @@ def get_arg():
         or using_clt_python
     ):
         ns.panel = ns.panel or not ns.no_panel
-        return cap_device, mode, kando, screenRes, ns
+        return cap_device, mode, kando, screenRes, bounds, ns
 
     ns.panel = ns.panel or not ns.no_panel
-    return (*tk_arg(), ns)
+    cap_device, mode, kando, screenRes, bounds = tk_arg()
+    return cap_device, mode, kando, screenRes, bounds, ns

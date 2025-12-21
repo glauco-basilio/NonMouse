@@ -39,7 +39,7 @@ elif pf == 'Linux':
 
 
 def main():
-    cap_device, mode, kando, screenRes, ns = get_arg()
+    cap_device, mode, kando, screenRes, screen_bounds, ns = get_arg()
     preX, preY = 0, 0
     i = 0
     LiTx, LiTy, list0x, list0y = [], [], [], []   # Moving average buffers.
@@ -225,14 +225,15 @@ def main():
                 preX = nowX
                 preY = nowY
                 # print(dx, dy)
-                if posx+dx < 0:  # Prevent cursor from going off-screen permanently.
-                    dx = -posx
-                elif posx+dx > screenRes[0]:
-                    dx = screenRes[0]-posx
-                if posy+dy < 0:
-                    dy = -posy
-                elif posy+dy > screenRes[1]:
-                    dy = screenRes[1]-posy
+                min_x, min_y, max_x, max_y = screen_bounds
+                if posx + dx < min_x:  # Prevent cursor from going off-screen permanently.
+                    dx = min_x - posx
+                elif posx + dx > max_x:
+                    dx = max_x - posx
+                if posy + dy < min_y:
+                    dy = min_y - posy
+                elif posy + dy > max_y:
+                    dy = max_y - posy
 
                 # Cursor movement only while the hotkey is pressed.
                 if prev_can == 1:
