@@ -42,7 +42,7 @@ def main():
     cap_device, mode, kando, screenRes, screen_bounds, hand, ns = get_arg()
     preX, preY = 0, 0
     i = 0
-    LiTx, LiTy, list0x, list0y = [], [], [], []   # Moving average buffers.
+    LiTx, LiTy = [], []   # Moving average buffers.
     cap_width = 1280
     cap_height = 720
     c_text = 0
@@ -163,7 +163,7 @@ def main():
                     ran = max(int(cfps/10), 1)
                     preX, preY = 0, 0
                     i = 0
-                    LiTx, LiTy, list0x, list0y = [], [], [], []
+                    LiTx, LiTy = [], []
 
                 if desired_mode != mode:
                     mode = desired_mode
@@ -234,12 +234,6 @@ def main():
                 # Seed preX/preY when we first activate the hotkey.
                 if prev_can == 0 or i == 0:
                     i += 1
-
-                # Moving averages for landmarks used below.
-                landmark0 = [calculate_moving_average(selected_landmarks.landmark[0].x, ran, list0x), calculate_moving_average(
-                    selected_landmarks.landmark[0].y, ran, list0y)]
-                landmark8 = [calculate_moving_average(selected_landmarks.landmark[8].x, ran, LiTx), calculate_moving_average(
-                    selected_landmarks.landmark[8].y, ran, LiTy)]
 
                 posx, posy = mouse.position
 
