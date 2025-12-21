@@ -13,7 +13,7 @@ import numpy as np
 import mediapipe as mp
 from pynput.mouse import Controller
 
-from nonmouse.args import get_arg, list_camera_devices
+from nonmouse.args import get_arg, list_camera_devices, TK_PANEL_GEOMETRY
 from nonmouse.utils import *
 
 mouse = Controller()
@@ -70,7 +70,7 @@ def main():
 
         panel_root = tk.Tk()
         panel_root.title("NonMouse Control Panel")
-        panel_root.geometry("360x420")
+        panel_root.geometry(TK_PANEL_GEOMETRY)
 
         devices = list_camera_devices()
         if not devices:
@@ -133,7 +133,7 @@ def main():
     hands = mp_hands.Hands(
         min_detection_confidence=0.8,   # Detection confidence.
         min_tracking_confidence=0.8,    # Tracking confidence.
-        max_num_hands=1                 # Max number of hands.
+        max_num_hands=2                 # Max number of hands.
     )
     # Main loop ########################################################################
     while cap.isOpened():
@@ -175,10 +175,10 @@ def main():
         success, image = cap.read()
         if not success:
             continue
-        if mode == 1:                   # Mouse
-            image = cv2.flip(image, 0)  # Flip vertically.
-        elif mode == 2:                 # Touch
-            image = cv2.flip(image, 1)  # Flip horizontally.
+        # if mode == 1:                   # Mouse
+        #     image = cv2.flip(image, 0)  # Flip vertically.
+        # elif mode == 2:                 # Touch
+        #     image = cv2.flip(image, 1)  # Flip horizontally.
 
         # Flip horizontally and convert BGR to RGB.
         image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
@@ -193,17 +193,19 @@ def main():
             if results.multi_handedness:
                 for idx, handedness in enumerate(results.multi_handedness):
                     label = handedness.classification[0].label.lower()
-                    if mode == 1:
-                        if label == "left":
-                            label = "right"
-                        elif label == "right":
-                            label = "left"
+                    print(label,hand)
                     if label == hand:
                         selected_index = idx
                         break
-            selected_landmarks = None
+                    # if mode == 1:
+                    #     if label == "left":
+                    #         label = "right"
+                    #     elif label == "right":
+                    #         label = "left"
+                    #     break
+            mouse_move_landmarks = None
             if selected_index is not None:
-                selected_landmarks = results.multi_hand_landmarks[selected_index]
+                mouse_move_landmarks = results.multi_hand_landmarks[selected_index]
             # Draw all detected hands for feedback.
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(
@@ -220,16 +222,14 @@ def main():
                     can = 0
                     c_text = 1          # Prompt to press hotkey.
                     # i = 0
-            if can == 0 and selected_landmarks is not None:
+            if can == 0 and mouse_move_landmarks is not None:
                 # Keep a live baseline while inactive to avoid jumps on activation.
-                baseline_x = calculate_moving_average(selected_landmarks.landmark[8].x, ran, LiTx)
-                baseline_y = calculate_moving_average(selected_landmarks.landmark[8].y, ran, LiTy)
+                baseline_x = calculate_moving_average(mouse_move_landmarks.landmark[8].x, ran, LiTx)
+                baseline_y = calculate_moving_average(mouse_move_landmarks.landmark[8].y, ran, LiTy)
                 preX, preY = baseline_x, baseline_y
                 i = 0
             # When the global hotkey is pressed ###############################################
-            if can == 1:
-                if selected_landmarks is None:
-                    continue
+            if can == 1 and mouse_move_landmarks is not None:
                 # print(hand_landmarks.landmark[0])
                 # Seed preX/preY when we first activate the hotkey.
                 if prev_can == 0 or i == 0:
@@ -240,9 +240,9 @@ def main():
                 # Use index fingertip to drive cursor movement.
                 # Convert camera coordinates into mouse deltas.
                 nowX = calculate_moving_average(
-                    hand_landmarks.landmark[8].x, ran, LiTx)
+                    mouse_move_landmarks.landmark[8].x, ran, LiTx)
                 nowY = calculate_moving_average(
-                    hand_landmarks.landmark[8].y, ran, LiTy)
+                    mouse_move_landmarks.landmark[8].y, ran, LiTy)
                 if prev_can == 0:
                     preX, preY = nowX, nowY
 
@@ -265,11 +265,13 @@ def main():
                 elif posy + dy > max_y:
                     dy = max_y - posy
 
+                if mode == 1:
+                    dy=-dy;
                 # Cursor movement only while the hotkey is pressed.
                 if prev_can == 1:
                     mouse.move(dx, dy)
-                draw_circle(image, selected_landmarks.landmark[8].x * image_width,
-                            selected_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
+                draw_circle(image, mouse_move_landmarks.landmark[8].x * image_width,
+                            mouse_move_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
             prev_can = can
 
         # Display ########################################################################

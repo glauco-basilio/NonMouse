@@ -7,6 +7,8 @@ import platform
 import sys
 from typing import Optional, Tuple
 
+TK_PANEL_GEOMETRY = "370x420"
+
 
 def _get_screen_resolution() -> Tuple[int, int]:
     pf = platform.system()
@@ -165,7 +167,7 @@ def tk_arg():
 
     root = tk.Tk()
     root.title("First Setup")
-    root.geometry("370x320")
+    root.geometry(TK_PANEL_GEOMETRY)
     screenRes = (root.winfo_screenwidth(),
                  root.winfo_screenheight())  # Display resolution
     Val1 = tk.IntVar()
