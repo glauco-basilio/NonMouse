@@ -111,6 +111,12 @@ def cli_arg(argv: Optional[list] = None):
         default=3.0,
         help="Mouse sensitivity multiplier (default: 3.0)",
     )
+    parser.add_argument(
+        "--hand",
+        choices=["right", "left"],
+        default="right",
+        help="Hand to track for mouse movement (default: right)",
+    )
     parser.add_argument("--screen-width", type=int, default=None)
     parser.add_argument("--screen-height", type=int, default=None)
     parser.add_argument(
@@ -143,7 +149,15 @@ def cli_arg(argv: Optional[list] = None):
         screen_w = screen_w or auto_w
         screen_h = screen_h or auto_h
     bounds = _get_screen_bounds()
-    return ns.camera, place_to_mode[ns.place], float(ns.sensitivity), (int(screen_w), int(screen_h)), bounds, ns
+    return (
+        ns.camera,
+        place_to_mode[ns.place],
+        float(ns.sensitivity),
+        (int(screen_w), int(screen_h)),
+        bounds,
+        ns.hand,
+        ns,
+    )
 
 
 def tk_arg():
@@ -156,9 +170,12 @@ def tk_arg():
                  root.winfo_screenheight())  # Display resolution
     Val1 = tk.IntVar()
     Val2 = tk.IntVar()
+    Val3 = tk.IntVar()
     Val4 = tk.IntVar()
+    Val3.set(0)                         # Default hand: Right
     Val4.set(30)                        # Default mouse sensitivity
     place = ['Normal', 'Above', 'Behind']
+    hands = ['Right', 'Left']
     # Camera #########################################################################
     tk.Label(text='Camera').grid(row=1, column=0, sticky="w")
     devices = _list_camera_devices()
@@ -182,27 +199,37 @@ def tk_arg():
                        text=f'{place[i]}'
                        ).grid(row=next_row + 2, column=i*2)
     tk.Label(text='     ').grid(row=next_row + 3)
+    # Mouse move hand ##############################################################
+    tk.Label(text='Mouse move hand').grid(row=next_row + 4, column=0, sticky="w")
+    for i in range(2):
+        tk.Radiobutton(root,
+                       value=i,
+                       variable=Val3,
+                       text=f'{hands[i]}'
+                       ).grid(row=next_row + 5, column=i*2)
+    tk.Label(text='     ').grid(row=next_row + 6)
     # Sensitivity ###################################################################
-    tk.Label(text='Sensitivity').grid(row=next_row + 4, column=0, sticky="w")
+    tk.Label(text='Sensitivity').grid(row=next_row + 7, column=0, sticky="w")
     s1 = tk.Scale(root, orient='h',
                   from_=1, to=100, variable=Val4
-                  ).grid(row=next_row + 5, column=2)
-    tk.Label(text='     ').grid(row=next_row + 6)
+                  ).grid(row=next_row + 8, column=2)
+    tk.Label(text='     ').grid(row=next_row + 9)
     # continue
     Button = tk.Button(text="continue", command=root.destroy).grid(
-        row=next_row + 7, column=2)
+        row=next_row + 10, column=2)
     # Wait
     root.mainloop()
     # Output
     cap_device = Val1.get()             # 0,1,2
     mode = Val2.get()                     # 0:youself 1:
     kando = Val4.get()/10               # 1~10
+    hand = "right" if Val3.get() == 0 else "left"
     bounds = _get_screen_bounds()
-    return cap_device, mode, kando, screenRes, bounds
+    return cap_device, mode, kando, screenRes, bounds, hand
 
 
 def get_arg():
-    cap_device, mode, kando, screenRes, bounds, ns = cli_arg()
+    cap_device, mode, kando, screenRes, bounds, hand, ns = cli_arg()
     has_cli_overrides = (
         ns.no_gui
         or ns.gui
@@ -211,13 +238,14 @@ def get_arg():
         or "--camera" in os.sys.argv
         or "--place" in os.sys.argv
         or "--sensitivity" in os.sys.argv
+        or "--hand" in os.sys.argv
         or "--screen-width" in os.sys.argv
         or "--screen-height" in os.sys.argv
     )
 
     if ns.gui and os.getenv("NONMOUSE_NO_GUI") not in {"1", "true", "yes"}:
-        cap_device, mode, kando, screenRes, bounds = tk_arg()
-        return cap_device, mode, kando, screenRes, bounds, ns
+        cap_device, mode, kando, screenRes, bounds, hand = tk_arg()
+        return cap_device, mode, kando, screenRes, bounds, hand, ns
 
     # Apple's Command Line Tools Python is frequently missing a usable Tk build; calling tk.Tk()
     # can abort the process. Prefer the CLI config unless the user explicitly forces --gui.
@@ -229,8 +257,8 @@ def get_arg():
         or using_clt_python
     ):
         ns.panel = ns.panel or not ns.no_panel
-        return cap_device, mode, kando, screenRes, bounds, ns
+        return cap_device, mode, kando, screenRes, bounds, hand, ns
 
     ns.panel = ns.panel or not ns.no_panel
-    cap_device, mode, kando, screenRes, bounds = tk_arg()
-    return cap_device, mode, kando, screenRes, bounds, ns
+    cap_device, mode, kando, screenRes, bounds, hand = tk_arg()
+    return cap_device, mode, kando, screenRes, bounds, hand, ns

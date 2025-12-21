@@ -77,6 +77,7 @@ Notes:
 - macOS will require Camera permission for the app you run it from (Terminal/VS Code/Python).
 - The Tk side panel for live camera/placement/sensitivity changes is enabled by default.
 - Use `--no-panel` to disable it, or `--panel` to force it on.
+- Use `--hand right|left` to select which hand moves the mouse (default: right).
 
 # Usage
 ## 1. Install a camera

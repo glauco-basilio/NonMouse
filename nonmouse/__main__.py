@@ -39,7 +39,7 @@ elif pf == 'Linux':
 
 
 def main():
-    cap_device, mode, kando, screenRes, screen_bounds, ns = get_arg()
+    cap_device, mode, kando, screenRes, screen_bounds, hand, ns = get_arg()
     preX, preY = 0, 0
     i = 0
     LiTx, LiTy, list0x, list0y = [], [], [], []   # Moving average buffers.
@@ -78,6 +78,7 @@ def main():
 
         cam_var = tk.IntVar(value=cap_device)
         place_var = tk.IntVar(value=mode)
+        hand_var = tk.IntVar(value=0 if hand == "right" else 1)
         sens_var = tk.IntVar(value=int(kando * 10))
 
         tk.Label(panel_root, text="Camera").grid(row=0, column=0, sticky="w")
@@ -100,18 +101,33 @@ def main():
                 text=label,
             ).grid(row=row_offset + 1, column=i, sticky="w")
 
-        tk.Label(panel_root, text="Sensitivity").grid(row=row_offset + 2, column=0, sticky="w")
+        tk.Label(panel_root, text="Mouse move hand").grid(row=row_offset + 2, column=0, sticky="w")
+        tk.Radiobutton(
+            panel_root,
+            value=0,
+            variable=hand_var,
+            text="Right",
+        ).grid(row=row_offset + 3, column=0, sticky="w")
+        tk.Radiobutton(
+            panel_root,
+            value=1,
+            variable=hand_var,
+            text="Left",
+        ).grid(row=row_offset + 3, column=1, sticky="w")
+
+        tk.Label(panel_root, text="Sensitivity").grid(row=row_offset + 4, column=0, sticky="w")
         tk.Scale(
             panel_root,
             orient="h",
             from_=1,
             to=100,
             variable=sens_var,
-        ).grid(row=row_offset + 3, column=0, columnspan=3, sticky="we")
+        ).grid(row=row_offset + 5, column=0, columnspan=3, sticky="we")
 
         panel_vars = {
             "cam_var": cam_var,
             "place_var": place_var,
+            "hand_var": hand_var,
             "sens_var": sens_var,
         }
     hands = mp_hands.Hands(
@@ -131,6 +147,7 @@ def main():
             if panel_vars is not None:
                 desired_device = int(panel_vars["cam_var"].get())
                 desired_mode = int(panel_vars["place_var"].get())
+                desired_hand = "right" if int(panel_vars["hand_var"].get()) == 0 else "left"
                 desired_kando = float(panel_vars["sens_var"].get()) / 10.0
 
                 if desired_device != cap_device:
@@ -150,6 +167,8 @@ def main():
 
                 if desired_mode != mode:
                     mode = desired_mode
+                if desired_hand != hand:
+                    hand = desired_hand
                 if desired_kando != kando:
                     kando = desired_kando
         p_s = time.perf_counter()
@@ -170,7 +189,22 @@ def main():
         image_height, image_width, _ = image.shape
 
         if results.multi_hand_landmarks:
-            # Draw hand landmarks.
+            selected_index = None
+            if results.multi_handedness:
+                for idx, handedness in enumerate(results.multi_handedness):
+                    label = handedness.classification[0].label.lower()
+                    if mode == 1:
+                        if label == "left":
+                            label = "right"
+                        elif label == "right":
+                            label = "left"
+                    if label == hand:
+                        selected_index = idx
+                        break
+            selected_landmarks = None
+            if selected_index is not None:
+                selected_landmarks = results.multi_hand_landmarks[selected_index]
+            # Draw all detected hands for feedback.
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(
                     image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
@@ -186,24 +220,26 @@ def main():
                     can = 0
                     c_text = 1          # Prompt to press hotkey.
                     # i = 0
-            if can == 0:
+            if can == 0 and selected_landmarks is not None:
                 # Keep a live baseline while inactive to avoid jumps on activation.
-                baseline_x = calculate_moving_average(hand_landmarks.landmark[8].x, ran, LiTx)
-                baseline_y = calculate_moving_average(hand_landmarks.landmark[8].y, ran, LiTy)
+                baseline_x = calculate_moving_average(selected_landmarks.landmark[8].x, ran, LiTx)
+                baseline_y = calculate_moving_average(selected_landmarks.landmark[8].y, ran, LiTy)
                 preX, preY = baseline_x, baseline_y
                 i = 0
             # When the global hotkey is pressed ###############################################
             if can == 1:
+                if selected_landmarks is None:
+                    continue
                 # print(hand_landmarks.landmark[0])
                 # Seed preX/preY when we first activate the hotkey.
                 if prev_can == 0 or i == 0:
                     i += 1
 
                 # Moving averages for landmarks used below.
-                landmark0 = [calculate_moving_average(hand_landmarks.landmark[0].x, ran, list0x), calculate_moving_average(
-                    hand_landmarks.landmark[0].y, ran, list0y)]
-                landmark8 = [calculate_moving_average(hand_landmarks.landmark[8].x, ran, LiTx), calculate_moving_average(
-                    hand_landmarks.landmark[8].y, ran, LiTy)]
+                landmark0 = [calculate_moving_average(selected_landmarks.landmark[0].x, ran, list0x), calculate_moving_average(
+                    selected_landmarks.landmark[0].y, ran, list0y)]
+                landmark8 = [calculate_moving_average(selected_landmarks.landmark[8].x, ran, LiTx), calculate_moving_average(
+                    selected_landmarks.landmark[8].y, ran, LiTy)]
 
                 posx, posy = mouse.position
 
@@ -238,8 +274,8 @@ def main():
                 # Cursor movement only while the hotkey is pressed.
                 if prev_can == 1:
                     mouse.move(dx, dy)
-                    draw_circle(image, hand_landmarks.landmark[8].x * image_width,
-                                hand_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
+                draw_circle(image, selected_landmarks.landmark[8].x * image_width,
+                            selected_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
             prev_can = can
 
         # Display ########################################################################
