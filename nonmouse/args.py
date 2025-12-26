@@ -104,14 +104,14 @@ def cli_arg(argv: Optional[list] = None):
     parser.add_argument(
         "--place",
         choices=["normal", "above", "behind"],
-        default="normal",
-        help="Camera placement / orientation (default: normal)",
+        default="above",
+        help="Camera placement / orientation (default: above)",
     )
     parser.add_argument(
         "--sensitivity",
         type=float,
-        default=3.0,
-        help="Mouse sensitivity multiplier (default: 3.0)",
+        default=10.0,
+        help="Mouse sensitivity multiplier (default: 10.0)",
     )
     parser.add_argument(
         "--hand",
@@ -174,8 +174,9 @@ def tk_arg():
     Val2 = tk.IntVar()
     Val3 = tk.IntVar()
     Val4 = tk.IntVar()
+    Val2.set(1)                         # Default placement: Above
     Val3.set(0)                         # Default hand: Right
-    Val4.set(30)                        # Default mouse sensitivity
+    Val4.set(100)                       # Default mouse sensitivity
     place = ['Normal', 'Above', 'Behind']
     hands = ['Right', 'Left']
     # Camera #########################################################################

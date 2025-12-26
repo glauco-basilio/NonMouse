@@ -22,8 +22,7 @@ if not hasattr(mp, "solutions"):
         "This project requires the legacy MediaPipe Solutions API (mp.solutions.*), "
         "but your installed 'mediapipe' package does not provide it.\n\n"
         "Fix:\n"
-        "- Apple Silicon (macOS/arm64): `pip install mediapipe-silicon numpy<2 opencv-contrib-python<4.12`\n"
-        "- Other platforms: install a MediaPipe build that includes `mp.solutions`.\n"
+        "- Ather platforms: install a MediaPipe build that includes `mp.solutions`.\n"
     )
 
 mp_drawing = mp.solutions.drawing_utils
@@ -104,15 +103,15 @@ def main():
         tk.Label(panel_root, text="Mouse move hand").grid(row=row_offset + 2, column=0, sticky="w")
         tk.Radiobutton(
             panel_root,
-            value=0,
-            variable=hand_var,
-            text="Right",
-        ).grid(row=row_offset + 3, column=0, sticky="w")
-        tk.Radiobutton(
-            panel_root,
             value=1,
             variable=hand_var,
             text="Left",
+        ).grid(row=row_offset + 3, column=0, sticky="w")
+        tk.Radiobutton(
+            panel_root,
+            value=0,
+            variable=hand_var,
+            text="Right",
         ).grid(row=row_offset + 3, column=1, sticky="w")
 
         tk.Label(panel_root, text="Sensitivity").grid(row=row_offset + 4, column=0, sticky="w")
@@ -254,7 +253,7 @@ def main():
                     dy = dy+0.5
                 preX = nowX
                 preY = nowY
-                # print(dx, dy)
+                print(dx, dy)
                 min_x, min_y, max_x, max_y = screen_bounds
                 if posx + dx < min_x:  # Prevent cursor from going off-screen permanently.
                     dx = min_x - posx
