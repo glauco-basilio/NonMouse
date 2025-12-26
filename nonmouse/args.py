@@ -7,7 +7,7 @@ import platform
 import sys
 from typing import Optional, Tuple
 
-TK_PANEL_GEOMETRY = "370x460"
+TK_PANEL_GEOMETRY = "370x500"
 
 
 def _get_screen_resolution() -> Tuple[int, int]:
@@ -120,6 +120,19 @@ def cli_arg(argv: Optional[list] = None):
         help="Cursor dead zone in pixels (default: 0)",
     )
     parser.add_argument(
+        "--debug-overlay",
+        dest="debug_overlay",
+        action="store_true",
+        default=True,
+        help="Show the debug overlay (default: on)",
+    )
+    parser.add_argument(
+        "--no-debug-overlay",
+        dest="debug_overlay",
+        action="store_false",
+        help="Hide the debug overlay",
+    )
+    parser.add_argument(
         "--hand",
         choices=["right", "left"],
         default="right",
@@ -162,6 +175,7 @@ def cli_arg(argv: Optional[list] = None):
         place_to_mode[ns.place],
         float(ns.sensitivity),
         float(ns.dead_zone),
+        bool(ns.debug_overlay),
         (int(screen_w), int(screen_h)),
         bounds,
         ns.hand,
@@ -182,10 +196,12 @@ def tk_arg():
     Val3 = tk.IntVar()
     Val4 = tk.IntVar()
     Val5 = tk.IntVar()
+    Val6 = tk.IntVar()
     Val2.set(1)                         # Default placement: Above
     Val3.set(0)                         # Default hand: Right
     Val4.set(100)                       # Default mouse sensitivity
     Val5.set(0)                         # Default dead zone (pixels)
+    Val6.set(1)                         # Default debug overlay (on)
     place = ['Normal', 'Above', 'Behind']
     hands = ['Right', 'Left']
     # Camera #########################################################################
@@ -232,9 +248,14 @@ def tk_arg():
              from_=0, to=100, variable=Val5
              ).grid(row=next_row + 11, column=2)
     tk.Label(text='     ').grid(row=next_row + 12)
+    # Debug overlay ##################################################################
+    tk.Label(text='Debug overlay').grid(row=next_row + 13, column=0, sticky="w")
+    tk.Checkbutton(root, variable=Val6, text='On').grid(
+        row=next_row + 13, column=2, sticky="w")
+    tk.Label(text='     ').grid(row=next_row + 14)
     # continue
     Button = tk.Button(text="continue", command=root.destroy).grid(
-        row=next_row + 13, column=2)
+        row=next_row + 15, column=2)
     # Wait
     root.mainloop()
     # Output
@@ -243,12 +264,13 @@ def tk_arg():
     kando = Val4.get()/10               # 1~10
     hand = "right" if Val3.get() == 0 else "left"
     dead_zone = float(Val5.get())
+    debug_overlay = bool(Val6.get())
     bounds = _get_screen_bounds()
-    return cap_device, mode, kando, dead_zone, screenRes, bounds, hand
+    return cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand
 
 
 def get_arg():
-    cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns = cli_arg()
+    cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand, ns = cli_arg()
     has_cli_overrides = (
         ns.no_gui
         or ns.gui
@@ -258,14 +280,16 @@ def get_arg():
         or "--place" in os.sys.argv
         or "--sensitivity" in os.sys.argv
         or "--dead-zone" in os.sys.argv
+        or "--debug-overlay" in os.sys.argv
+        or "--no-debug-overlay" in os.sys.argv
         or "--hand" in os.sys.argv
         or "--screen-width" in os.sys.argv
         or "--screen-height" in os.sys.argv
     )
 
     if ns.gui and os.getenv("NONMOUSE_NO_GUI") not in {"1", "true", "yes"}:
-        cap_device, mode, kando, dead_zone, screenRes, bounds, hand = tk_arg()
-        return cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns
+        cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand = tk_arg()
+        return cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand, ns
 
     # Apple's Command Line Tools Python is frequently missing a usable Tk build; calling tk.Tk()
     # can abort the process. Prefer the CLI config unless the user explicitly forces --gui.
@@ -277,8 +301,8 @@ def get_arg():
         or using_clt_python
     ):
         ns.panel = ns.panel or not ns.no_panel
-        return cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns
+        return cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand, ns
 
     ns.panel = ns.panel or not ns.no_panel
-    cap_device, mode, kando, dead_zone, screenRes, bounds, hand = tk_arg()
-    return cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns
+    cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand = tk_arg()
+    return cap_device, mode, kando, dead_zone, debug_overlay, screenRes, bounds, hand, ns

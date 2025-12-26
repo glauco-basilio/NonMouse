@@ -36,9 +36,56 @@ elif pf == 'Darwin':
 elif pf == 'Linux':
     hotkey = 'XXX'              # Hotkey is disabled on Linux.
 
+def _get_display_bounds():
+    if pf != "Darwin":
+        return []
+    try:
+        import Quartz  # type: ignore
+    except Exception:
+        Quartz = None
+    if Quartz is not None:
+        try:
+            max_displays = 32
+            err, display_ids, display_count = Quartz.CGGetActiveDisplayList(
+                max_displays, None, None
+            )
+            if err != 0:
+                raise RuntimeError("CGGetActiveDisplayList failed")
+            bounds = []
+            for display_id in display_ids[:display_count]:
+                rect = Quartz.CGDisplayBounds(display_id)
+                min_x = int(rect.origin.x)
+                min_y = int(rect.origin.y)
+                max_x = int(rect.origin.x + rect.size.width)
+                max_y = int(rect.origin.y + rect.size.height)
+                bounds.append((min_x, min_y, max_x, max_y))
+            return bounds
+        except Exception:
+            pass
+    try:
+        import AppKit  # type: ignore
+    except Exception:
+        return []
+    bounds = []
+    for screen in AppKit.NSScreen.screens():
+        frame = screen.frame()
+        min_x = int(frame.origin.x)
+        min_y = int(frame.origin.y)
+        max_x = int(frame.origin.x + frame.size.width)
+        max_y = int(frame.origin.y + frame.size.height)
+        bounds.append((min_x, min_y, max_x, max_y))
+    return bounds
+
+
+def _find_display_bounds(x, y, bounds):
+    for idx, (min_x, min_y, max_x, max_y) in enumerate(bounds):
+        if min_x <= x < max_x and min_y <= y < max_y:
+            return idx, (min_x, min_y, max_x, max_y)
+    return None, None
+
 
 def main():
-    cap_device, mode, kando, dead_zone, screenRes, screen_bounds, hand, ns = get_arg()
+    cap_device, mode, kando, dead_zone, debug_overlay, screenRes, screen_bounds, hand, ns = get_arg()
     preX, preY = 0, 0
     i = 0
     LiTx, LiTy = [], []   # Moving average buffers.
@@ -62,6 +109,7 @@ def main():
     cap, cfps = open_capture(cap_device)
     # Smoothing window (smaller = jittery cursor, larger = more latency).
     ran = max(int(cfps/10), 1)
+    display_bounds = _get_display_bounds()
     display_crop = None
     prev_hand_count = 0
     panel_root = None
@@ -82,6 +130,7 @@ def main():
         hand_var = tk.IntVar(value=0 if hand == "right" else 1)
         sens_var = tk.IntVar(value=int(kando * 10))
         dead_zone_var = tk.IntVar(value=int(dead_zone))
+        debug_overlay_var = tk.IntVar(value=1 if debug_overlay else 0)
 
         tk.Label(panel_root, text="Camera").grid(row=0, column=0, sticky="w")
         for row_idx, (idx, name) in enumerate(devices, start=1):
@@ -135,12 +184,20 @@ def main():
             variable=dead_zone_var,
         ).grid(row=row_offset + 7, column=0, columnspan=3, sticky="we")
 
+        tk.Label(panel_root, text="Debug overlay").grid(row=row_offset + 8, column=0, sticky="w")
+        tk.Checkbutton(
+            panel_root,
+            variable=debug_overlay_var,
+            text="On",
+        ).grid(row=row_offset + 8, column=1, sticky="w")
+
         panel_vars = {
             "cam_var": cam_var,
             "place_var": place_var,
             "hand_var": hand_var,
             "sens_var": sens_var,
             "dead_zone_var": dead_zone_var,
+            "debug_overlay_var": debug_overlay_var,
         }
     hands = mp_hands.Hands(
         min_detection_confidence=0.8,   # Detection confidence.
@@ -162,6 +219,7 @@ def main():
                 desired_hand = "right" if int(panel_vars["hand_var"].get()) == 0 else "left"
                 desired_kando = float(panel_vars["sens_var"].get()) / 10.0
                 desired_dead_zone = float(panel_vars["dead_zone_var"].get())
+                desired_debug_overlay = bool(panel_vars["debug_overlay_var"].get())
 
                 if desired_device != cap_device:
                     previous_device = cap_device
@@ -186,10 +244,13 @@ def main():
                     kando = desired_kando
                 if desired_dead_zone != dead_zone:
                     dead_zone = desired_dead_zone
+                if desired_debug_overlay != debug_overlay:
+                    debug_overlay = desired_debug_overlay
         p_s = time.perf_counter()
         success, image = cap.read()
         if not success:
             continue
+        debug_target_pos = None
         # if mode == 1:                   # Mouse
         #     image = cv2.flip(image, 0)  # Flip vertically.
         # elif mode == 2:                 # Touch
@@ -313,18 +374,46 @@ def main():
                 preX = nowX
                 preY = nowY
                 print(dx, dy)
-                min_x, min_y, max_x, max_y = screen_bounds
-                if posx + dx < min_x:  # Prevent cursor from going off-screen permanently.
-                    dx = min_x - posx
-                elif posx + dx > max_x:
-                    dx = max_x - posx
-                if posy + dy < min_y:
-                    dy = min_y - posy
-                elif posy + dy > max_y:
-                    dy = max_y - posy
+                target_x = posx + dx
+                target_y = posy + dy
+                if display_bounds:
+                    _, target_bounds = _find_display_bounds(target_x, target_y, display_bounds)
+                    if target_bounds is None:
+                        _current_idx, current_bounds = _find_display_bounds(posx, posy, display_bounds)
+                        if current_bounds is not None:
+                            min_x, min_y, max_x, max_y = current_bounds
+                            if target_x < min_x:
+                                dx = min_x - posx
+                            elif target_x >= max_x:
+                                dx = max_x - posx
+                            if target_y < min_y:
+                                dy = min_y - posy
+                            elif target_y >= max_y:
+                                dy = max_y - posy
+                        else:
+                            min_x, min_y, max_x, max_y = screen_bounds
+                            if target_x < min_x:  # Prevent cursor from going off-screen permanently.
+                                dx = min_x - posx
+                            elif target_x > max_x:
+                                dx = max_x - posx
+                            if target_y < min_y:
+                                dy = min_y - posy
+                            elif target_y > max_y:
+                                dy = max_y - posy
+                else:
+                    min_x, min_y, max_x, max_y = screen_bounds
+                    if target_x < min_x:  # Prevent cursor from going off-screen permanently.
+                        dx = min_x - posx
+                    elif target_x > max_x:
+                        dx = max_x - posx
+                    if target_y < min_y:
+                        dy = min_y - posy
+                    elif target_y > max_y:
+                        dy = max_y - posy
 
                 if mode == 1:
-                    dy=-dy;
+                    dy = -dy
+                debug_target_pos = (posx + dx, posy + dy)
                 # Cursor movement only while the hotkey is pressed.
                 if prev_can == 1:
                     mouse.move(dx, dy)
@@ -354,6 +443,54 @@ def main():
         fps = str(int(1/(float(p_e)-float(p_s))))
         cv2.putText(dst, "FPS:"+fps, (20, 80),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+        if debug_overlay:
+            debug_mouse_pos = mouse.position
+            debug_text_y = 120
+            cv2.putText(
+                dst,
+                f"Mouse: {debug_mouse_pos[0]:.0f},{debug_mouse_pos[1]:.0f}",
+                (20, debug_text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2,
+            )
+            if debug_target_pos is None:
+                target_text = "Target: -"
+            else:
+                target_text = f"Target: {debug_target_pos[0]:.0f},{debug_target_pos[1]:.0f}"
+            cv2.putText(
+                dst,
+                target_text,
+                (20, debug_text_y + 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2,
+            )
+            if display_bounds:
+                display_idx, active_bounds = _find_display_bounds(
+                    debug_mouse_pos[0], debug_mouse_pos[1], display_bounds
+                )
+                if active_bounds is not None:
+                    min_x, min_y, max_x, max_y = active_bounds
+                    display_text = (
+                        f"Display {display_idx + 1}/{len(display_bounds)}: "
+                        f"{min_x},{min_y}-{max_x},{max_y}"
+                    )
+                else:
+                    display_text = f"Display: gap ({len(display_bounds)} total)"
+            else:
+                display_text = "Display: unknown"
+            cv2.putText(
+                dst,
+                display_text,
+                (20, debug_text_y + 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2,
+            )
         
         cv2.imshow(window_name, dst)
         if (cv2.waitKey(1) & 0xFF == 27) or (cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) == 0):
