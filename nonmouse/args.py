@@ -7,7 +7,7 @@ import platform
 import sys
 from typing import Optional, Tuple
 
-TK_PANEL_GEOMETRY = "370x420"
+TK_PANEL_GEOMETRY = "370x460"
 
 
 def _get_screen_resolution() -> Tuple[int, int]:
@@ -114,6 +114,12 @@ def cli_arg(argv: Optional[list] = None):
         help="Mouse sensitivity multiplier (default: 10.0)",
     )
     parser.add_argument(
+        "--dead-zone",
+        type=float,
+        default=0.0,
+        help="Cursor dead zone in pixels (default: 0)",
+    )
+    parser.add_argument(
         "--hand",
         choices=["right", "left"],
         default="right",
@@ -155,6 +161,7 @@ def cli_arg(argv: Optional[list] = None):
         ns.camera,
         place_to_mode[ns.place],
         float(ns.sensitivity),
+        float(ns.dead_zone),
         (int(screen_w), int(screen_h)),
         bounds,
         ns.hand,
@@ -174,9 +181,11 @@ def tk_arg():
     Val2 = tk.IntVar()
     Val3 = tk.IntVar()
     Val4 = tk.IntVar()
+    Val5 = tk.IntVar()
     Val2.set(1)                         # Default placement: Above
     Val3.set(0)                         # Default hand: Right
     Val4.set(100)                       # Default mouse sensitivity
+    Val5.set(0)                         # Default dead zone (pixels)
     place = ['Normal', 'Above', 'Behind']
     hands = ['Right', 'Left']
     # Camera #########################################################################
@@ -217,9 +226,15 @@ def tk_arg():
                   from_=1, to=100, variable=Val4
                   ).grid(row=next_row + 8, column=2)
     tk.Label(text='     ').grid(row=next_row + 9)
+    # Dead zone ######################################################################
+    tk.Label(text='Dead zone (px)').grid(row=next_row + 10, column=0, sticky="w")
+    tk.Scale(root, orient='h',
+             from_=0, to=100, variable=Val5
+             ).grid(row=next_row + 11, column=2)
+    tk.Label(text='     ').grid(row=next_row + 12)
     # continue
     Button = tk.Button(text="continue", command=root.destroy).grid(
-        row=next_row + 10, column=2)
+        row=next_row + 13, column=2)
     # Wait
     root.mainloop()
     # Output
@@ -227,12 +242,13 @@ def tk_arg():
     mode = Val2.get()                     # 0:youself 1:
     kando = Val4.get()/10               # 1~10
     hand = "right" if Val3.get() == 0 else "left"
+    dead_zone = float(Val5.get())
     bounds = _get_screen_bounds()
-    return cap_device, mode, kando, screenRes, bounds, hand
+    return cap_device, mode, kando, dead_zone, screenRes, bounds, hand
 
 
 def get_arg():
-    cap_device, mode, kando, screenRes, bounds, hand, ns = cli_arg()
+    cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns = cli_arg()
     has_cli_overrides = (
         ns.no_gui
         or ns.gui
@@ -241,14 +257,15 @@ def get_arg():
         or "--camera" in os.sys.argv
         or "--place" in os.sys.argv
         or "--sensitivity" in os.sys.argv
+        or "--dead-zone" in os.sys.argv
         or "--hand" in os.sys.argv
         or "--screen-width" in os.sys.argv
         or "--screen-height" in os.sys.argv
     )
 
     if ns.gui and os.getenv("NONMOUSE_NO_GUI") not in {"1", "true", "yes"}:
-        cap_device, mode, kando, screenRes, bounds, hand = tk_arg()
-        return cap_device, mode, kando, screenRes, bounds, hand, ns
+        cap_device, mode, kando, dead_zone, screenRes, bounds, hand = tk_arg()
+        return cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns
 
     # Apple's Command Line Tools Python is frequently missing a usable Tk build; calling tk.Tk()
     # can abort the process. Prefer the CLI config unless the user explicitly forces --gui.
@@ -260,8 +277,8 @@ def get_arg():
         or using_clt_python
     ):
         ns.panel = ns.panel or not ns.no_panel
-        return cap_device, mode, kando, screenRes, bounds, hand, ns
+        return cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns
 
     ns.panel = ns.panel or not ns.no_panel
-    cap_device, mode, kando, screenRes, bounds, hand = tk_arg()
-    return cap_device, mode, kando, screenRes, bounds, hand, ns
+    cap_device, mode, kando, dead_zone, screenRes, bounds, hand = tk_arg()
+    return cap_device, mode, kando, dead_zone, screenRes, bounds, hand, ns

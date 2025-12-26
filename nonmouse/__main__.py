@@ -38,7 +38,7 @@ elif pf == 'Linux':
 
 
 def main():
-    cap_device, mode, kando, screenRes, screen_bounds, hand, ns = get_arg()
+    cap_device, mode, kando, dead_zone, screenRes, screen_bounds, hand, ns = get_arg()
     preX, preY = 0, 0
     i = 0
     LiTx, LiTy = [], []   # Moving average buffers.
@@ -62,6 +62,8 @@ def main():
     cap, cfps = open_capture(cap_device)
     # Smoothing window (smaller = jittery cursor, larger = more latency).
     ran = max(int(cfps/10), 1)
+    display_crop = None
+    prev_hand_count = 0
     panel_root = None
     panel_vars = None
     if ns.panel:
@@ -79,6 +81,7 @@ def main():
         place_var = tk.IntVar(value=mode)
         hand_var = tk.IntVar(value=0 if hand == "right" else 1)
         sens_var = tk.IntVar(value=int(kando * 10))
+        dead_zone_var = tk.IntVar(value=int(dead_zone))
 
         tk.Label(panel_root, text="Camera").grid(row=0, column=0, sticky="w")
         for row_idx, (idx, name) in enumerate(devices, start=1):
@@ -123,11 +126,21 @@ def main():
             variable=sens_var,
         ).grid(row=row_offset + 5, column=0, columnspan=3, sticky="we")
 
+        tk.Label(panel_root, text="Dead zone (px)").grid(row=row_offset + 6, column=0, sticky="w")
+        tk.Scale(
+            panel_root,
+            orient="h",
+            from_=0,
+            to=100,
+            variable=dead_zone_var,
+        ).grid(row=row_offset + 7, column=0, columnspan=3, sticky="we")
+
         panel_vars = {
             "cam_var": cam_var,
             "place_var": place_var,
             "hand_var": hand_var,
             "sens_var": sens_var,
+            "dead_zone_var": dead_zone_var,
         }
     hands = mp_hands.Hands(
         min_detection_confidence=0.8,   # Detection confidence.
@@ -148,6 +161,7 @@ def main():
                 desired_mode = int(panel_vars["place_var"].get())
                 desired_hand = "right" if int(panel_vars["hand_var"].get()) == 0 else "left"
                 desired_kando = float(panel_vars["sens_var"].get()) / 10.0
+                desired_dead_zone = float(panel_vars["dead_zone_var"].get())
 
                 if desired_device != cap_device:
                     previous_device = cap_device
@@ -170,6 +184,8 @@ def main():
                     hand = desired_hand
                 if desired_kando != kando:
                     kando = desired_kando
+                if desired_dead_zone != dead_zone:
+                    dead_zone = desired_dead_zone
         p_s = time.perf_counter()
         success, image = cap.read()
         if not success:
@@ -186,6 +202,41 @@ def main():
         image.flags.writeable = True    # Draw annotations on the image.
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         frame_height, frame_width, _ = image.shape
+
+        hand_count = len(results.multi_hand_landmarks or [])
+        if hand_count != prev_hand_count:
+            if hand_count > 0:
+                min_x, min_y = 1.0, 1.0
+                max_x, max_y = 0.0, 0.0
+                for hand_landmarks in results.multi_hand_landmarks:
+                    for lm in hand_landmarks.landmark:
+                        min_x = min(min_x, lm.x)
+                        min_y = min(min_y, lm.y)
+                        max_x = max(max_x, lm.x)
+                        max_y = max(max_y, lm.y)
+                min_x = max(min_x, 0.0)
+                min_y = max(min_y, 0.0)
+                max_x = min(max_x, 1.0)
+                max_y = min(max_y, 1.0)
+                if max_x > min_x and max_y > min_y:
+                    pad_ratio = 0.2
+                    box_w = (max_x - min_x) * frame_width
+                    box_h = (max_y - min_y) * frame_height
+                    pad_x = int(box_w * pad_ratio)
+                    pad_y = int(box_h * pad_ratio)
+                    min_x_px = max(int(min_x * frame_width) - pad_x, 0)
+                    min_y_px = max(int(min_y * frame_height) - pad_y, 0)
+                    max_x_px = min(int(max_x * frame_width) + pad_x, frame_width)
+                    max_y_px = min(int(max_y * frame_height) + pad_y, frame_height)
+                    if max_x_px - min_x_px > 0 and max_y_px - min_y_px > 0:
+                        display_crop = (min_x_px, min_y_px, max_x_px, max_y_px)
+                    else:
+                        display_crop = None
+                else:
+                    display_crop = None
+            else:
+                display_crop = None
+            prev_hand_count = hand_count
 
         if results.multi_hand_landmarks:
             selected_index = None
@@ -248,9 +299,17 @@ def main():
                 dx = kando * (nowX - preX) * frame_width
                 dy = kando * (nowY - preY) * frame_height
 
+                if dead_zone > 0:
+                    if abs(dx) < dead_zone:
+                        dx = 0.0
+                    if abs(dy) < dead_zone:
+                        dy = 0.0
+
                 if pf == 'Windows' or pf == 'Linux':     # Add a small bias on Windows/Linux.
-                    dx = dx+0.5
-                    dy = dy+0.5
+                    if dx != 0:
+                        dx = dx + 0.5
+                    if dy != 0:
+                        dy = dy + 0.5
                 preX = nowX
                 preY = nowY
                 print(dx, dy)
@@ -275,31 +334,9 @@ def main():
 
         # Display ########################################################################
         display_image = image
-        if results.multi_hand_landmarks:
-            min_x, min_y = 1.0, 1.0
-            max_x, max_y = 0.0, 0.0
-            for hand_landmarks in results.multi_hand_landmarks:
-                for lm in hand_landmarks.landmark:
-                    min_x = min(min_x, lm.x)
-                    min_y = min(min_y, lm.y)
-                    max_x = max(max_x, lm.x)
-                    max_y = max(max_y, lm.y)
-            min_x = max(min_x, 0.0)
-            min_y = max(min_y, 0.0)
-            max_x = min(max_x, 1.0)
-            max_y = min(max_y, 1.0)
-            if max_x > min_x and max_y > min_y:
-                pad_ratio = 0.2
-                box_w = (max_x - min_x) * frame_width
-                box_h = (max_y - min_y) * frame_height
-                pad_x = int(box_w * pad_ratio)
-                pad_y = int(box_h * pad_ratio)
-                min_x_px = max(int(min_x * frame_width) - pad_x, 0)
-                min_y_px = max(int(min_y * frame_height) - pad_y, 0)
-                max_x_px = min(int(max_x * frame_width) + pad_x, frame_width)
-                max_y_px = min(int(max_y * frame_height) + pad_y, frame_height)
-                if max_x_px - min_x_px > 0 and max_y_px - min_y_px > 0:
-                    display_image = image[min_y_px:max_y_px, min_x_px:max_x_px]
+        if display_crop is not None:
+            min_x_px, min_y_px, max_x_px, max_y_px = display_crop
+            display_image = image[min_y_px:max_y_px, min_x_px:max_x_px]
 
 
 
