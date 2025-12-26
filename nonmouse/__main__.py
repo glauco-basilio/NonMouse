@@ -185,7 +185,7 @@ def main():
         results = hands.process(image)  # MediaPipe processing.
         image.flags.writeable = True    # Draw annotations on the image.
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        image_height, image_width, _ = image.shape
+        frame_height, frame_width, _ = image.shape
 
         if results.multi_hand_landmarks:
             selected_index = None
@@ -245,8 +245,8 @@ def main():
                 if prev_can == 0:
                     preX, preY = nowX, nowY
 
-                dx = kando * (nowX - preX) * image_width
-                dy = kando * (nowY - preY) * image_height
+                dx = kando * (nowX - preX) * frame_width
+                dy = kando * (nowY - preY) * frame_height
 
                 if pf == 'Windows' or pf == 'Linux':     # Add a small bias on Windows/Linux.
                     dx = dx+0.5
@@ -269,22 +269,55 @@ def main():
                 # Cursor movement only while the hotkey is pressed.
                 if prev_can == 1:
                     mouse.move(dx, dy)
-                draw_circle(image, mouse_move_landmarks.landmark[8].x * image_width,
-                            mouse_move_landmarks.landmark[8].y * image_height, 8, (250, 0, 0))
+                draw_circle(image, mouse_move_landmarks.landmark[8].x * frame_width,
+                            mouse_move_landmarks.landmark[8].y * frame_height, 8, (250, 0, 0))
             prev_can = can
 
         # Display ########################################################################
+        display_image = image
+        if results.multi_hand_landmarks:
+            min_x, min_y = 1.0, 1.0
+            max_x, max_y = 0.0, 0.0
+            for hand_landmarks in results.multi_hand_landmarks:
+                for lm in hand_landmarks.landmark:
+                    min_x = min(min_x, lm.x)
+                    min_y = min(min_y, lm.y)
+                    max_x = max(max_x, lm.x)
+                    max_y = max(max_y, lm.y)
+            min_x = max(min_x, 0.0)
+            min_y = max(min_y, 0.0)
+            max_x = min(max_x, 1.0)
+            max_y = min(max_y, 1.0)
+            if max_x > min_x and max_y > min_y:
+                pad_ratio = 0.2
+                box_w = (max_x - min_x) * frame_width
+                box_h = (max_y - min_y) * frame_height
+                pad_x = int(box_w * pad_ratio)
+                pad_y = int(box_h * pad_ratio)
+                min_x_px = max(int(min_x * frame_width) - pad_x, 0)
+                min_y_px = max(int(min_y * frame_height) - pad_y, 0)
+                max_x_px = min(int(max_x * frame_width) + pad_x, frame_width)
+                max_y_px = min(int(max_y * frame_height) + pad_y, frame_height)
+                if max_x_px - min_x_px > 0 and max_y_px - min_y_px > 0:
+                    display_image = image[min_y_px:max_y_px, min_x_px:max_x_px]
+
+
+
+        display_scale = 0.4
+        target_width = max(int(frame_width * display_scale), 1)
+        target_height = max(int(frame_height * display_scale), 1)
+        dst = cv2.resize(display_image, (target_width, target_height))
+
         if c_text == 1:
-            cv2.putText(image, f"Push {hotkey}", (20, 450),
-                        cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 3)
-        cv2.putText(image, "cameraFPS:"+str(cfps), (20, 40),
+            cv2.putText(dst, f"Push {hotkey}", (20, 250),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+        cv2.putText(dst, "cameraFPS:"+str(cfps), (20, 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
         p_e = time.perf_counter()
         fps = str(int(1/(float(p_e)-float(p_s))))
-        cv2.putText(image, "FPS:"+fps, (20, 80),
+        cv2.putText(dst, "FPS:"+fps, (20, 80),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
-        dst = cv2.resize(image, dsize=None, fx=0.4,
-                         fy=0.4)         # Display at 0.4x scale.
+        
         cv2.imshow(window_name, dst)
         if (cv2.waitKey(1) & 0xFF == 27) or (cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) == 0):
             break
